@@ -11,6 +11,28 @@ import com.qualcomm.robotcore.util.Range;
 @TeleOp
 public class SwerveTest extends OpMode {
 
+    // Module order indices
+    private static final int FL = 0, FR = 1, BL = 2, BR = 3;
+
+    // Set these after a quick calibration:
+// driveInvert: +1 means "positive motor power drives robot forward" when module is pointed forward
+    private final double[] driveInvert = new double[]{ +1, +1, +1, +1 };
+
+    // steerInvert: +1 means "positive servo power increases measured angle"
+    private final double[] steerInvert = new double[]{ +1, +1, +1, +1 };
+
+    // Analog angle unwrap + filter (servo degrees)
+    private final double[] servoAngleUnwrapped = new double[]{0,0,0,0};
+    private final double[] servoAngleFiltered  = new double[]{0,0,0,0};
+    private final boolean[] angleInit          = new boolean[]{false,false,false,false};
+
+    private double angleAlpha = 0.25; // EMA smoothing (0..1). Start ~0.2-0.35
+
+    private final boolean[] isFlipped = new boolean[]{false,false,false,false};
+    private double flipEnter = 100.0; // enter flip mode
+    private double flipExit  = 80.0;  // exit flip mode
+
+
     // Geometry (tune these to your robot’s wheelbase/trackwidth in consistent units)
     final double L = 0.98;
     final double W = 1.00;
@@ -60,8 +82,8 @@ public class SwerveTest extends OpMode {
     final double GEARBOX_RATIO = 1.0 / (36.0 / 24.0); // 0.666666...
 
     // Servo helpers
-    double minServoPower = 0.03;     // overcome static friction
-    double deadbandDeg = 2.5;        // within this error, stop steering
+    double minServoPower = 0.02;     // overcome static friction
+    double deadbandDeg = 8;        // within this error, stop steering
 
     // Drive scaling
     double driveScale = 0.25;        // overall speed limit for testing
@@ -107,10 +129,10 @@ public class SwerveTest extends OpMode {
         swerveDrive(leftStickY, leftStickX, rightStickX, reset);
 
         // Telemetry: module angles (MODULE degrees)
-        telemetry.addData("FL angle", normalizeAngle(getModuleAngleDeg(frontLeftAnalog, FL_OFFSET)));
-        telemetry.addData("FR angle", normalizeAngle(getModuleAngleDeg(frontRightAnalog, FR_OFFSET)));
-        telemetry.addData("BL angle", normalizeAngle(getModuleAngleDeg(backLeftAnalog, BL_OFFSET)));
-        telemetry.addData("BR angle", normalizeAngle(getModuleAngleDeg(backRightAnalog, BR_OFFSET)));
+//        telemetry.addData("FL angle", normalizeAngle(getModuleAngleDeg(frontLeftAnalog, FL_OFFSET)));
+//        telemetry.addData("FR angle", normalizeAngle(getModuleAngleDeg(frontRightAnalog, FR_OFFSET)));
+//        telemetry.addData("BL angle", normalizeAngle(getModuleAngleDeg(backLeftAnalog, BL_OFFSET)));
+//        telemetry.addData("BR angle", normalizeAngle(getModuleAngleDeg(backRightAnalog, BR_OFFSET)));
 
         telemetry.addData("Last tgt FL", lastTargetFL);
         telemetry.addData("Last tgt FR", lastTargetFR);
@@ -173,31 +195,33 @@ public class SwerveTest extends OpMode {
         }
 
         // Current module angles (MODULE degrees, normalized to [-180,180])
-        double current_fr = normalizeAngle(getModuleAngleDeg(frontRightAnalog, FR_OFFSET));
-        double current_fl = normalizeAngle(getModuleAngleDeg(frontLeftAnalog, FL_OFFSET));
-        double current_rl = normalizeAngle(getModuleAngleDeg(backLeftAnalog, BL_OFFSET));
-        double current_rr = normalizeAngle(getModuleAngleDeg(backRightAnalog, BR_OFFSET));
+        // Current module angles (use FILTERED, continuous-ish)
+        double current_fl = normalizeAngle(getFilteredModuleAngleDeg(FL, frontLeftAnalog,  FL_OFFSET));
+        double current_fr = normalizeAngle(getFilteredModuleAngleDeg(FR, frontRightAnalog, FR_OFFSET));
+        double current_bl = normalizeAngle(getFilteredModuleAngleDeg(BL, backLeftAnalog,   BL_OFFSET));
+        double current_br = normalizeAngle(getFilteredModuleAngleDeg(BR, backRightAnalog,  BR_OFFSET));
 
-        // OPTIMIZE: choose shortest steering move; possibly flip wheel speed
-        double[] opt_fr = optimize(angle_fr, speed_fr, current_fr);
-        double[] opt_fl = optimize(angle_fl, speed_fl, current_fl);
-        double[] opt_rl = optimize(angle_rl, speed_rl, current_rl);
-        double[] opt_rr = optimize(angle_rr, speed_rr, current_rr);
+// OPTIMIZE with hysteresis to prevent flip-chatter
+        double[] opt_fl = optimizeHysteresis(FL, angle_fl, speed_fl, current_fl);
+        double[] opt_fr = optimizeHysteresis(FR, angle_fr, speed_fr, current_fr);
+        double[] opt_bl = optimizeHysteresis(BL, angle_rl, speed_rl, current_bl);
+        double[] opt_br = optimizeHysteresis(BR, angle_rr, speed_rr, current_br);
 
-        // Drive motors: DO NOT use signum(currentAngle). Direction comes from optimize() result.
-        frontRightMotor.setPower(opt_fr[1] * driveScale);
-        frontLeftMotor.setPower(opt_fl[1] * driveScale);
-        backLeftMotor.setPower(opt_rl[1] * driveScale);
-        backRightMotor.setPower(opt_rr[1] * driveScale);
+// Drive motors with per-module inversion
+        frontLeftMotor.setPower(opt_fl[1] * driveScale * driveInvert[FL]);
+        frontRightMotor.setPower(opt_fr[1] * driveScale * driveInvert[FR]);
+        backLeftMotor.setPower(opt_bl[1] * driveScale * driveInvert[BL]);
+        backRightMotor.setPower(opt_br[1] * driveScale * driveInvert[BR]);
 
-        // Store last targets (MODULE degrees)
-        lastTargetFR = opt_fr[0];
+// Store last targets (MODULE degrees)
         lastTargetFL = opt_fl[0];
-        lastTargetRL = opt_rl[0];
-        lastTargetRR = opt_rr[0];
+        lastTargetFR = opt_fr[0];
+        lastTargetRL = opt_bl[0];
+        lastTargetRR = opt_br[0];
 
-        // Run steering PID to those targets
+// Run steering PID
         runPID(lastTargetFL, lastTargetFR, lastTargetRL, lastTargetRR);
+
     }
 
     private void stopDrive() {
@@ -214,75 +238,97 @@ public class SwerveTest extends OpMode {
      * Steering control.
      * Targets are MODULE degrees. We convert to SERVO degrees for PID + analog comparison.
      */
-    private void runPID(double tFL_moduleDeg, double tFR_moduleDeg, double tRL_moduleDeg, double tRR_moduleDeg) {
+    // Replace your ENTIRE runPID(...) with this version.
+// It uses the new filtered/unwrapped helpers for angle feedback and correct indexing for inversion.
+
+    private void runPID(double tFL_moduleDeg, double tFR_moduleDeg, double tBL_moduleDeg, double tBR_moduleDeg) {
         double dt = angleTimer.seconds();
         angleTimer.reset();
         if (dt < 0.001) dt = 0.001;
 
-        // Convert module target -> servo target
+        // Convert MODULE target -> SERVO target (servo degrees)
         double tFL_servoDeg = moduleToServoDeg(normalizeAngle(tFL_moduleDeg));
         double tFR_servoDeg = moduleToServoDeg(normalizeAngle(tFR_moduleDeg));
-        double tRL_servoDeg = moduleToServoDeg(normalizeAngle(tRL_moduleDeg));
-        double tRR_servoDeg = moduleToServoDeg(normalizeAngle(tRR_moduleDeg));
+        double tBL_servoDeg = moduleToServoDeg(normalizeAngle(tBL_moduleDeg));
+        double tBR_servoDeg = moduleToServoDeg(normalizeAngle(tBR_moduleDeg));
 
-        // Current servo angles from sensors (SERVO degrees)
-        double curFL_servoDeg = normalizeAngle(getServoAngleDeg(frontLeftAnalog, FL_OFFSET));
-        double curFR_servoDeg = normalizeAngle(getServoAngleDeg(frontRightAnalog, FR_OFFSET));
-        double curRL_servoDeg = normalizeAngle(getServoAngleDeg(backLeftAnalog, BL_OFFSET));
-        double curRR_servoDeg = normalizeAngle(getServoAngleDeg(backRightAnalog, BR_OFFSET));
+        // Current SERVO angles (filtered + unwrapped) for feedback
+        double curFL_servoDeg = normalizeAngle(updateFilteredUnwrappedServoDeg(FL, frontLeftAnalog,  FL_OFFSET));
+        double curFR_servoDeg = normalizeAngle(updateFilteredUnwrappedServoDeg(FR, frontRightAnalog, FR_OFFSET));
+        double curBL_servoDeg = normalizeAngle(updateFilteredUnwrappedServoDeg(BL, backLeftAnalog,   BL_OFFSET));
+        double curBR_servoDeg = normalizeAngle(updateFilteredUnwrappedServoDeg(BR, backRightAnalog,  BR_OFFSET));
 
-        // Target velocity estimate (servo deg/s) based on last targets (module deg) -> convert to servo deg
-        // Use the delta between *module* targets, converted into servo space.
+        // Last SERVO targets (computed from last MODULE targets) for velocity estimate
         double lastFL_servoDeg = moduleToServoDeg(normalizeAngle(lastTargetFL));
         double lastFR_servoDeg = moduleToServoDeg(normalizeAngle(lastTargetFR));
-        double lastRL_servoDeg = moduleToServoDeg(normalizeAngle(lastTargetRL));
-        double lastRR_servoDeg = moduleToServoDeg(normalizeAngle(lastTargetRR));
+        double lastBL_servoDeg = moduleToServoDeg(normalizeAngle(lastTargetRL)); // your "RL" var is BL
+        double lastBR_servoDeg = moduleToServoDeg(normalizeAngle(lastTargetRR)); // your "RR" var is BR
 
+        // Target velocity estimate in SERVO deg/s
         double velFL = normalizeAngle(tFL_servoDeg - lastFL_servoDeg) / dt;
         double velFR = normalizeAngle(tFR_servoDeg - lastFR_servoDeg) / dt;
-        double velRL = normalizeAngle(tRL_servoDeg - lastRL_servoDeg) / dt;
-        double velRR = normalizeAngle(tRR_servoDeg - lastRR_servoDeg) / dt;
+        double velBL = normalizeAngle(tBL_servoDeg - lastBL_servoDeg) / dt;
+        double velBR = normalizeAngle(tBR_servoDeg - lastBR_servoDeg) / dt;
 
-        // PID outputs (FIXED: use the correct controller per module)
+        // PID outputs (each module uses its own controller)
         double powerFL = flPID.calculate(tFL_servoDeg, curFL_servoDeg, velFL, deadbandDeg, minServoPower);
         double powerFR = frPID.calculate(tFR_servoDeg, curFR_servoDeg, velFR, deadbandDeg, minServoPower);
-        double powerRL = rlPID.calculate(tRL_servoDeg, curRL_servoDeg, velRL, deadbandDeg, minServoPower);
-        double powerRR = rrPID.calculate(tRR_servoDeg, curRR_servoDeg, velRR, deadbandDeg, minServoPower);
+        double powerBL = rlPID.calculate(tBL_servoDeg, curBL_servoDeg, velBL, deadbandDeg, minServoPower);
+        double powerBR = rrPID.calculate(tBR_servoDeg, curBR_servoDeg, velBR, deadbandDeg, minServoPower);
 
-        frontLeftServo.setPower(powerFL);
-        frontRightServo.setPower(powerFR);
-        backLeftServo.setPower(powerRL);
-        backRightServo.setPower(powerRR);
+        // Apply steer inversion per module (critical for mirrored modules)
+        frontLeftServo.setPower(powerFL * steerInvert[FL]);
+        frontRightServo.setPower(powerFR * steerInvert[FR]);
+        backLeftServo.setPower(powerBL * steerInvert[BL]);
+        backRightServo.setPower(powerBR * steerInvert[BR]);
 
         // Update stored last targets (MODULE degrees)
         lastTargetFL = normalizeAngle(tFL_moduleDeg);
         lastTargetFR = normalizeAngle(tFR_moduleDeg);
-        lastTargetRL = normalizeAngle(tRL_moduleDeg);
-        lastTargetRR = normalizeAngle(tRR_moduleDeg);
+        lastTargetRL = normalizeAngle(tBL_moduleDeg); // keep your variable name but treat as BL
+        lastTargetRR = normalizeAngle(tBR_moduleDeg);
     }
+
+    // fix fl gears
 
     /**
      * Reads analog sensor and returns SERVO angle in degrees in [-180, 180] after offset.
      */
-    private double getServoAngleDeg(AnalogInput sensor, double offsetDeg) {
+    private double rawServoAngleDeg(AnalogInput sensor, double offsetDeg) {
         double rawDeg = (sensor.getVoltage() / 3.3) * 360.0;
-        return normalizeAngle(rawDeg - offsetDeg);
+        return normalizeAngle(rawDeg - offsetDeg); // wrapped [-180,180]
     }
 
-    /**
-     * Returns MODULE angle in degrees based on servo angle and gear ratio.
-     */
-    private double getModuleAngleDeg(AnalogInput sensor, double offsetDeg) {
-        double servoDeg = getServoAngleDeg(sensor, offsetDeg);
-        return normalizeAngle(servoDeg * GEARBOX_RATIO);
+    private double updateFilteredUnwrappedServoDeg(int idx, AnalogInput sensor, double offsetDeg) {
+        double a = rawServoAngleDeg(sensor, offsetDeg);
+
+        if (!angleInit[idx]) {
+            angleInit[idx] = true;
+            servoAngleUnwrapped[idx] = a;
+            servoAngleFiltered[idx] = a;
+            return servoAngleFiltered[idx];
+        }
+
+        // unwrap: keep continuity vs previous unwrapped
+        double prev = servoAngleUnwrapped[idx];
+
+        // compute smallest delta from previous wrapped value
+        double prevWrapped = normalizeAngle(prev);
+        double delta = normalizeAngle(a - prevWrapped);
+
+        servoAngleUnwrapped[idx] = prev + delta;
+
+        // EMA filter in unwrapped space
+        servoAngleFiltered[idx] = servoAngleFiltered[idx] + angleAlpha * (servoAngleUnwrapped[idx] - servoAngleFiltered[idx]);
+        return servoAngleFiltered[idx];
     }
 
-    /**
-     * Convert MODULE degrees -> SERVO degrees.
-     */
-    private double moduleToServoDeg(double moduleDeg) {
-        return moduleDeg / GEARBOX_RATIO;
+    private double getFilteredModuleAngleDeg(int idx, AnalogInput sensor, double offsetDeg) {
+        double servoDeg = updateFilteredUnwrappedServoDeg(idx, sensor, offsetDeg);
+        return servoDeg * GEARBOX_RATIO; // module deg (continuous-ish)
     }
+
+    private double moduleToServoDeg(double moduleDeg) { return moduleDeg / GEARBOX_RATIO; }
 
     private double normalizeAngle(double angleDeg) {
         while (angleDeg > 180.0) angleDeg -= 360.0;
@@ -297,15 +343,24 @@ public class SwerveTest extends OpMode {
      *
      * Returns [optimizedTargetDeg, optimizedSpeed]
      */
-    private double[] optimize(double targetDeg, double speed, double currentDeg) {
+    private double[] optimizeHysteresis(int idx, double targetDeg, double speed, double currentDeg) {
         double delta = normalizeAngle(targetDeg - currentDeg);
 
-        if (Math.abs(delta) > 90.0) {
+        // hysteresis on flip decision
+        if (!isFlipped[idx]) {
+            if (Math.abs(delta) > flipEnter) isFlipped[idx] = true;
+        } else {
+            if (Math.abs(delta) < flipExit) isFlipped[idx] = false;
+        }
+
+        if (isFlipped[idx]) {
             targetDeg = normalizeAngle(targetDeg - Math.signum(delta) * 180.0);
             speed *= -1.0;
         }
-        return new double[]{normalizeAngle(targetDeg), speed};
+
+        return new double[]{ normalizeAngle(targetDeg), speed };
     }
+
 
     public static class PIDController {
         private final double kP, kI, kD, kF;
