@@ -95,10 +95,12 @@ public class SwerveTest extends OpMode {
 
 
     double lastTargetFR = 0, lastTargetFL = 0, lastTargetRL = 0, lastTargetRR = 0;
+    double lastAngleFR = 0, lastAngleFL = 0, lastAngleRL = 0, lastAngleRR = 0;
 
     double speed = 0.35;
 
     boolean wasFlippedFL, wasFlippedFR, wasFlippedBL, wasFlippedBR = false;
+    double flSpeed, frSpeed, blSpeed, brSpeed = 0;
 
     ElapsedTime dx = new ElapsedTime();
 
@@ -174,7 +176,13 @@ public class SwerveTest extends OpMode {
         telemetry.addData("BR Flipped", wasFlippedBR);
         telemetry.addData("BL Flipped", wasFlippedBL);
         telemetry.addData("FL Flipped", wasFlippedFL);
-//        telemetry.addData("---", "---");
+
+        telemetry.addData("FL Speed", flSpeed);
+        telemetry.addData("FR Speed", frSpeed);
+        telemetry.addData("RL Speed", blSpeed);
+        telemetry.addData("RR Speed", brSpeed);
+
+        //        telemetry.addData("---", "---");
 
 //        telemetry.addData("FR Wheel", "%.1f°", getAngle(frontRightAnalog, FR_OFFSET));
 //        telemetry.addData("BL Wheel", "%.1f°", getAngle(backLeftAnalog, BL_OFFSET));
@@ -208,14 +216,14 @@ public class SwerveTest extends OpMode {
 
         double R = Math.sqrt(L*L + W*W);
 
-        double y_fr = y_cmd - turn_cmd * L/R;
-        double x_fr = x_cmd - turn_cmd * W/R;
-        double y_fl = y_cmd - turn_cmd * L/R;
-        double x_fl = x_cmd + turn_cmd * W/R;
-        double y_rl = y_cmd + turn_cmd * L/R;
-        double x_rl = x_cmd + turn_cmd * W/R;
-        double y_rr = y_cmd + turn_cmd * L/R;
-        double x_rr = x_cmd - turn_cmd * W/R;
+        double y_fr = y_cmd - turn_cmd * L;
+        double x_fr = x_cmd - turn_cmd * W;
+        double y_fl = y_cmd - turn_cmd * L;
+        double x_fl = x_cmd + turn_cmd * W;
+        double y_rl = y_cmd + turn_cmd * L;
+        double x_rl = x_cmd + turn_cmd * W;
+        double y_rr = y_cmd + turn_cmd * L;
+        double x_rr = x_cmd - turn_cmd * W;
 
         double speed_fr = Math.hypot(x_fr, y_fr);
         double speed_fl = Math.hypot(x_fl, y_fl);
@@ -239,42 +247,72 @@ public class SwerveTest extends OpMode {
         double current_rl = getAngle(backLeftAnalog, BL_OFFSET);
         double current_rr = getAngle(backRightAnalog, BR_OFFSET);
 
+        current_fr = filter(lastAngleFR, current_fr);
+        current_fl = filter(lastAngleFL, current_fl);
+        current_rl = filter(lastAngleRL, current_rl);
+        current_rr = filter(lastAngleRR, current_rr);
+
+        lastAngleFR = current_fr;
+        lastAngleFL = current_fl;
+        lastAngleRL = current_rl;
+        lastAngleRR = current_rr;
+
+
+        double[] opt_fr, opt_fl, opt_rl, opt_rr;
         if (speed_fr < 0.05)
         {
-            angle_fr = lastTargetFR;
+            opt_fr = new double[]{lastTargetFR, 0.0, wasFlippedFR ? 1 : 0};
         }
+        else
+        {
+            opt_fr = optimize(angle_fr, speed_fr, current_fr, wasFlippedFR);
+        }
+
         if (speed_fl < 0.05)
         {
-            angle_fl = lastTargetFL;
+            opt_fl = new double[]{lastTargetFL, 0.0, wasFlippedFL ? 1 : 0};
         }
+        else
+        {
+            opt_fl = optimize(angle_fl, speed_fl, current_fl, wasFlippedFL);
+        }
+
         if (speed_rl < 0.05)
         {
-            angle_rl = lastTargetRL;
+            opt_rl = new double[]{lastTargetRL, 0.0, wasFlippedBL ? 1 : 0};
+        }
+        else
+        {
+            opt_rl = optimize(angle_rl, speed_rl, current_rl, wasFlippedBL);
         }
         if (speed_rr < 0.05)
         {
-            angle_rr = lastTargetRR;
+            opt_rr = new double[]{lastTargetRR, 0.0, wasFlippedBR ? 1 : 0};
         }
-
-        double[] opt_fr = optimize(angle_fr, speed_fr, current_fr, wasFlippedFR);
-        double[] opt_fl = optimize(angle_fl, speed_fl, current_fl, wasFlippedFL); // Jacob has a boo boo!!
-        double[] opt_rl = optimize(angle_rl, speed_rl, current_rl, wasFlippedBL);
-        double[] opt_rr = optimize(angle_rr, speed_rr, current_rr, wasFlippedBR);
+        else
+        {
+            opt_rr = optimize(angle_rr, speed_rr, current_rr, wasFlippedBR);
+        }
 
         wasFlippedFR = opt_fr[2] > 0;
         wasFlippedFL = opt_fl[2] > 0;
         wasFlippedBL = opt_rl[2] > 0;
         wasFlippedBR = opt_rr[2] > 0;
 
-        frontRightMotor.setPower(opt_fr[1] * speed);
-        frontLeftMotor.setPower(opt_fl[1] * speed);
-        backLeftMotor.setPower(opt_rl[1] * speed);
-        backRightMotor.setPower(opt_rr[1] * speed);
+        frSpeed = opt_fr[1] * speed;
+        flSpeed = opt_fl[1] * speed;
+        blSpeed = opt_rl[1] * speed;
+        brSpeed = opt_rr[1] * speed;
 
-        lastTargetFR = opt_fr[0];
-        lastTargetFL = opt_fl[0];
-        lastTargetRL = opt_rl[0];
-        lastTargetRR = opt_rr[0];
+        frontRightMotor.setPower(frSpeed);
+        frontLeftMotor.setPower(flSpeed);
+        backLeftMotor.setPower(blSpeed);
+        backRightMotor.setPower(brSpeed);
+
+//        lastTargetFR = opt_fr[0];
+//        lastTargetFL = opt_fl[0];
+//        lastTargetRL = opt_rl[0];
+//        lastTargetRR = opt_rr[0];
 
         runPID(opt_fl[0], opt_fr[0], opt_rl[0], opt_rr[0]);
     }
@@ -333,23 +371,25 @@ public class SwerveTest extends OpMode {
 
         double adjustedAngle = (rawAngle/GEARBOX_RATIO) - offset; // Coordinate missmatch between servo and wheel space!
 
-        return adjustedAngle;
+        return normalizeAngle(adjustedAngle);
+    }
+
+    double alpha = 0.8;
+
+    private double filter(double prev, double angle)
+    {
+        return (angle * alpha + prev * (1-alpha));
     }
 
     private double normalizeAngle(double angle) {
 
-        if (angle > 180)
-        {
-            angle -= 360;
-            angle *= -1;
-        }
-        if (angle < -180)
-        {
-            angle += 360;
-            angle *= -1;
-        }
-        return angle;
+        angle = (angle + 180.0) % 360.0;
+        if (angle < 0) angle += 360.0;
+        return angle - 180.0;
     }
+
+    double FLIP_CENTER = 90;
+    double FLIP_BAND = 15;
 
     private double[] optimize(
             double target,
@@ -357,28 +397,22 @@ public class SwerveTest extends OpMode {
             double current,
             boolean wasFlipped
     ) {
-        double delta = normalizeAngle(target - current);
+        double error = normalizeAngle(target - current);
+        double absError = Math.abs(error);
 
-        boolean shouldFlip = Math.abs(delta) > 90;
-
-        // pluh
-        if (wasFlipped && !shouldFlip) {
-            // buh
-            if (Math.abs(delta) > 85) {
-                shouldFlip = true;  // guh
-            }
-//            else
-//            {
-//                speed *= -1;
-//            }
+        // hysteresis around 90 degrees
+        if (!wasFlipped) {
+            if (absError > FLIP_CENTER + FLIP_BAND) wasFlipped = true;
+        } else {
+            if (absError < FLIP_CENTER - FLIP_BAND) wasFlipped = false;
         }
 
-        if (shouldFlip) {
-            target = normalizeAngle(target + 180);
+        if (wasFlipped) {
+            target = normalizeAngle(target + 180.0);
             speed *= -1;
         }
 
-        return new double[]{target, speed, shouldFlip ? 1 : 0};
+        return new double[]{target, speed, wasFlipped ? 1 : 0};
     }
 
 
@@ -410,17 +444,14 @@ public class SwerveTest extends OpMode {
 //            double fTerm = targetVel * kF;
 
             lastError = error;
+            timer.reset();
 
             double output = pTerm + dTerm;
 
-            if (Math.abs(error) < 15.0)
-                return Math.signum(error) * minServoPower;
+            if (Math.abs(output) < 1e-6) output = 0;
+            else output += Math.signum(output) * minServoPower;
 
-            output += Math.signum(output) * minServoPower;
-
-            timer.reset();
-
-            return Range.clip(output, -1.0, 1.0);
+            return Range.clip(output, -1, 1);
         }
     }
 }
