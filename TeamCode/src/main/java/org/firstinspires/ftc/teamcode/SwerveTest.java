@@ -325,12 +325,23 @@ public class SwerveTest extends OpMode {
 
         double adjustedAngle = (rawAngle/GEARBOX_RATIO) - offset; // Coordinate missmatch between servo and wheel space!
 
-        return normalizeAngle(adjustedAngle);
+        if (adjustedAngle > 180) { adjustedAngle -= 360;}
+
+        return adjustedAngle;
     }
 
     private double normalizeAngle(double angle) {
-        if (angle > 180){angle -= 360;}
-        if (angle < -180){angle += 360;}
+
+        if (angle > 180)
+        {
+            angle -= 360;
+            angle *= -1;
+        }
+        if (angle < -180)
+        {
+            angle += 360;
+            angle *= -1;
+        }
         return angle;
     }
 
@@ -340,6 +351,7 @@ public class SwerveTest extends OpMode {
             double current,
             boolean wasFlipped
     ) {
+
         double delta = normalizeAngle(target - current);
 
         boolean shouldFlip = Math.abs(delta) > 90;
