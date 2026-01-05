@@ -96,7 +96,7 @@ public class SwerveTest extends OpMode {
 
     double lastTargetFR = 0, lastTargetFL = 0, lastTargetRL = 0, lastTargetRR = 0;
 
-    double speed = 0.6;
+    double speed = 1;
 
     boolean wasFlippedFL, wasFlippedFR, wasFlippedBL, wasFlippedBR = false;
 
@@ -124,8 +124,8 @@ public class SwerveTest extends OpMode {
 
         frontLeftMotor.setDirection(DcMotorSimple.Direction.FORWARD);
         frontRightMotor.setDirection(DcMotorSimple.Direction.FORWARD);
-        backLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
-        backRightMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+        backLeftMotor.setDirection(DcMotorSimple.Direction.FORWARD);
+        backRightMotor.setDirection(DcMotorSimple.Direction.FORWARD);
 
 
 //        otos = hardwareMap.get(SparkFunOTOS.class, "otos");
@@ -333,6 +333,7 @@ public class SwerveTest extends OpMode {
             wasFlipped = true;
         }
         else if (wasFlipped && Math.abs(delta) < 85) {
+            target = normalizeAngle(target - 180);
             wasFlipped = false;
         }
 
