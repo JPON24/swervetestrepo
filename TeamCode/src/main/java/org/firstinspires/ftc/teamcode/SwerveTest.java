@@ -62,22 +62,22 @@ public class SwerveTest extends OpMode {
 
     double FLkP = 0.002;
     double FLkI = 0.0;
-    double FLkD = 0.0;
+    double FLkD = 0.0001;
     double FLkF = 0.0;
 
     double FRkP = 0.002;
     double FRkI = 0.0;
-    double FRkD = 0.0;
+    double FRkD = 0.0001;
     double FRkF = 0.0;
 
     double RLkP = 0.002;
     double RLkI = 0.0;
-    double RLkD = 0.0;
+    double RLkD = 0.0001;
     double RLkF = 0.0;
 
     double RRkP = 0.002;
     double RRkI = 0.0;
-    double RRkD = 0.0;
+    double RRkD = 0.0001;
     double RRkF = 0.0;
 
     double inputAngle = 0;
@@ -386,11 +386,11 @@ public class SwerveTest extends OpMode {
 
             // PLEASE SPEED I NEED THIS!!!
             // MY FEED IS KINDA FORWARDLESS!!!
-            double fTerm = targetVel * kF;
+//            double fTerm = targetVel * kF;
 
             lastError = error;
 
-            double output = pTerm + dTerm + fTerm;
+            double output = pTerm + dTerm;
 
             if (Math.abs(error) < 15.0)
                 return Math.signum(error) * minServoPower;
