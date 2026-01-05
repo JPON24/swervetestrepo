@@ -83,7 +83,7 @@ public class SwerveTest extends OpMode {
     double inputAngle = 0;
     double turnSpeedDeg = 60;
 
-    double FL_OFFSET = 3.8; // Test these offsets LMAO
+    double FL_OFFSET = 176; // Test these offsets LMAO
     double FR_OFFSET = 162;
     double BL_OFFSET = 63;
     double BR_OFFSET = 48.6;
@@ -96,7 +96,7 @@ public class SwerveTest extends OpMode {
 
     double lastTargetFR = 0, lastTargetFL = 0, lastTargetRL = 0, lastTargetRR = 0;
 
-    double speed = 0.4;
+    double speed = 0.7;
 
     boolean wasFlippedFL, wasFlippedFR, wasFlippedBL, wasFlippedBR = false;
 
