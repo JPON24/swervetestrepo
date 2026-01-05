@@ -96,7 +96,7 @@ public class SwerveTest extends OpMode {
 
     double lastTargetFR = 0, lastTargetFL = 0, lastTargetRL = 0, lastTargetRR = 0;
 
-    double speed = 0.7;
+    double speed = 0.35;
 
     boolean wasFlippedFL, wasFlippedFR, wasFlippedBL, wasFlippedBR = false;
 
@@ -162,18 +162,26 @@ public class SwerveTest extends OpMode {
         telemetry.addData("servo BL :", getAngle(backLeftAnalog, BL_OFFSET));
         telemetry.addData("servo BR :", getAngle(backRightAnalog, BR_OFFSET));
 
-        double rawFL = (frontLeftAnalog.getVoltage() / 3.3) * 360.0;
-        telemetry.addData("FL Raw Sensor", "%.1f°", rawFL);
-        telemetry.addData("FL Wheel Angle", "%.1f°", getAngle(frontLeftAnalog, FL_OFFSET));
+//        double rawFL = (frontLeftAnalog.getVoltage() / 3.3) * 360.0;
+//        telemetry.addData("FL Raw Sensor", "%.1f°", rawFL);
+//        telemetry.addData("FL Wheel Angle", "%.1f°", getAngle(frontLeftAnalog, FL_OFFSET));
         telemetry.addData("FL Target", "%.1f°", lastTargetFL);
-        telemetry.addData("FL Flipped", wasFlippedFL);
-        telemetry.addData("---", "---");
-        telemetry.addData("FR Wheel", "%.1f°", getAngle(frontRightAnalog, FR_OFFSET));
-        telemetry.addData("BL Wheel", "%.1f°", getAngle(backLeftAnalog, BL_OFFSET));
-        telemetry.addData("BR Wheel", "%.1f°", getAngle(backRightAnalog, BR_OFFSET));
+        telemetry.addData("FR Target", "%.1f°", lastTargetFR);
+        telemetry.addData("RL Target", "%.1f°", lastTargetRL);
+        telemetry.addData("RR Target", "%.1f°", lastTargetRR);
+
         telemetry.addData("FR Flipped", wasFlippedFR);
         telemetry.addData("BR Flipped", wasFlippedBR);
         telemetry.addData("BL Flipped", wasFlippedBL);
+        telemetry.addData("FL Flipped", wasFlippedFL);
+//        telemetry.addData("---", "---");
+
+//        telemetry.addData("FR Wheel", "%.1f°", getAngle(frontRightAnalog, FR_OFFSET));
+//        telemetry.addData("BL Wheel", "%.1f°", getAngle(backLeftAnalog, BL_OFFSET));
+//        telemetry.addData("BR Wheel", "%.1f°", getAngle(backRightAnalog, BR_OFFSET));
+//        telemetry.addData("FR Flipped", wasFlippedFR);
+//        telemetry.addData("BR Flipped", wasFlippedBR);
+//        telemetry.addData("BL Flipped", wasFlippedBL);
 
 
 
@@ -359,6 +367,10 @@ public class SwerveTest extends OpMode {
             if (Math.abs(delta) > 85) {
                 shouldFlip = true;  // guh
             }
+//            else
+//            {
+//                speed *= -1;
+//            }
         }
 
         if (shouldFlip) {
