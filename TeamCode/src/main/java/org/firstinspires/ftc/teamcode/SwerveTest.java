@@ -325,8 +325,6 @@ public class SwerveTest extends OpMode {
 
         double adjustedAngle = (rawAngle/GEARBOX_RATIO) - offset; // Coordinate missmatch between servo and wheel space!
 
-        if (adjustedAngle > 180) { adjustedAngle -= 360;}
-
         return adjustedAngle;
     }
 
@@ -351,7 +349,6 @@ public class SwerveTest extends OpMode {
             double current,
             boolean wasFlipped
     ) {
-
         double delta = normalizeAngle(target - current);
 
         boolean shouldFlip = Math.abs(delta) > 90;
