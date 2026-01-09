@@ -79,7 +79,7 @@ public class SwerveBackup extends OpMode {
 
     double lastTargetFR = 0, lastTargetFL = 0, lastTargetRL = 0, lastTargetRR = 0;
 
-    double speed = 0.6;
+    double speed = 1;
 
 //    boolean wasFlippedFL, wasFlippedFR, wasFlippedBL, wasFlippedBR = false;
 

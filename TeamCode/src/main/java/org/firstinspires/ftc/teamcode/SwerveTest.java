@@ -645,6 +645,13 @@ public class SwerveTest extends OpMode {
         telemetry.update();
     }
 
+    boolean flReverse = false;
+    boolean frReverse = false;
+    boolean rlReverse = false;
+    boolean rrReverse = false;
+
+    double lastRawAngleFL, lastRawAngleFR, lastRawAngleRL, lastRawAngleRR = 0;
+
     public void swerveDrive(double y_cmd_field, double x_cmd_field, double turn_cmd, boolean reset) {
         double heading_rad = Math.toRadians(0);
 
@@ -656,14 +663,14 @@ public class SwerveTest extends OpMode {
             return;
         }
 
-        double y_fr = y_cmd - turn_cmd * L;
-        double x_fr = x_cmd - turn_cmd * W;
-        double y_fl = y_cmd - turn_cmd * L;
-        double x_fl = x_cmd + turn_cmd * W;
-        double y_rl = y_cmd + turn_cmd * L;
-        double x_rl = x_cmd + turn_cmd * W;
-        double y_rr = y_cmd + turn_cmd * L;
-        double x_rr = x_cmd - turn_cmd * W;
+        double y_fr = y_cmd - turn_cmd * W;
+        double x_fr = x_cmd - turn_cmd * L;
+        double y_fl = y_cmd - turn_cmd * W;
+        double x_fl = x_cmd + turn_cmd * L;
+        double y_rl = y_cmd + turn_cmd * W;
+        double x_rl = x_cmd + turn_cmd * L;
+        double y_rr = y_cmd + turn_cmd * W;
+        double x_rr = x_cmd - turn_cmd * L;
 
         double speed_fr = Math.hypot(x_fr, y_fr);
         double speed_fl = Math.hypot(x_fl, y_fl);
@@ -717,15 +724,61 @@ public class SwerveTest extends OpMode {
         blSpeed = opt_rl[1] * speed;
         brSpeed = opt_rr[1] * speed;
 
-        frontRightMotor.setPower(frSpeed);
-        frontLeftMotor.setPower(flSpeed);
-        backLeftMotor.setPower(blSpeed);
-        backRightMotor.setPower(brSpeed);
+        double rawAngleFL = getRawAngle(frontLeftAnalog, FL_OFFSET);
+        double rawAngleFR = getRawAngle(frontLeftAnalog, FL_OFFSET);
+        double rawAngleRL = getRawAngle(frontLeftAnalog, FL_OFFSET);
+        double rawAngleRR = getRawAngle(frontLeftAnalog, FL_OFFSET);
+
+        if (Math.abs(rawAngleFL) < 20 && Math.abs(lastRawAngleFL) > 520)
+        {
+            flReverse = !flReverse;
+        }
+        else if (Math.abs(rawAngleFL) > 520 && Math.abs(lastRawAngleFL) < 20)
+        {
+            flReverse = !flReverse;
+        }
+
+        if (Math.abs(rawAngleFR) < 20 && Math.abs(lastRawAngleFR) > 520)
+        {
+            frReverse = !frReverse;
+        }
+        else if (Math.abs(rawAngleFR) > 520 && Math.abs(lastRawAngleFR) < 20)
+        {
+            frReverse = !frReverse;
+        }
+
+        if (Math.abs(rawAngleRL) < 20 && Math.abs(lastRawAngleRL) > 520)
+        {
+            rlReverse = !rlReverse;
+        }
+        else if (Math.abs(rawAngleRL) > 520 && Math.abs(lastRawAngleRL) < 20)
+        {
+            rlReverse = !rlReverse;
+        }
+
+        if (Math.abs(rawAngleRR) < 20 && Math.abs(lastRawAngleRR) > 520)
+        {
+            rrReverse = !rrReverse;
+        }
+        else if (Math.abs(rawAngleRR) > 520 && Math.abs(lastRawAngleRR) < 20)
+        {
+            rrReverse = !rrReverse;
+        }
+
+        frontRightMotor.setPower(frSpeed * (frReverse ? -1 : 1));
+        frontLeftMotor.setPower(flSpeed* (flReverse ? -1 : 1));
+        backLeftMotor.setPower(blSpeed* (rlReverse ? -1 : 1));
+        backRightMotor.setPower(brSpeed* (rrReverse ? -1 : 1));
 
         lastTargetFR = opt_fr[0];
         lastTargetFL = opt_fl[0];
         lastTargetRL = opt_rl[0];
         lastTargetRR = opt_rr[0];
+
+        lastRawAngleFL = rawAngleFL;
+        lastRawAngleFR = rawAngleFR;
+        lastRawAngleRL = rawAngleRL;
+        lastRawAngleRR = rawAngleRR;
 
         runPID(opt_fl[0], opt_fr[0], opt_rl[0], opt_rr[0]);
     }
@@ -765,13 +818,10 @@ public class SwerveTest extends OpMode {
 
         angleTimer.reset();
 
-//        powerFL = 0.15 * gamepad1.left_stick_x;
-
         frontLeftServo.setPower(powerFL);
         frontRightServo.setPower(powerFR);
         backLeftServo.setPower(powerRL);
         backRightServo.setPower(powerRR);
-
 
         lastTargetFL = tFL;
         lastTargetFR = tFR;
@@ -786,6 +836,13 @@ public class SwerveTest extends OpMode {
         double adjustedAngle = (rawAngle/GEARBOX_RATIO) - offset; // Coordinate missmatch between servo and wheel space!
 
         return adjustedAngle;
+    }
+
+    private double getRawAngle(AnalogInput sensor, double offset) {
+        double rawAngle = (sensor.getVoltage() / 3.3) * 360.0;
+
+        // Apply offset in servo space (before gearbox conversion)
+        return (rawAngle - offset) / GEARBOX_RATIO;
     }
 
     private double normalizeAngle(double angle)
